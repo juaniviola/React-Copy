@@ -3,9 +3,12 @@
 import { ReactCopy } from './library';
 
 function App(props) {
+  const [state, setState] = ReactCopy.useState(0);
+
   return (
     <div id="foo">
-      <h1>Hey {props.name}</h1>
+      <h1 onClick={() => setState(c => c+1)}>Hey, {props.name}</h1>
+      <p>Counter: {state}</p>
       <a href="https://google.com/">something</a>
     </div>
   );

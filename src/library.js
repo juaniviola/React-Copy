@@ -1,6 +1,8 @@
 let nextUnitOfWork = null;
 let currentRoot = null;
 let wipRoot = null;
+let wipFiber = null;
+let hookIndex = null;
 let deletions = null;
 
 function createElement(type, props, ...children) {
@@ -92,7 +94,6 @@ function commitWork(fiber) {
   while (!domParentFiber.dom) {
     domParentFiber = domParentFiber.parent;
   }
-
   const domParent = domParentFiber.dom;
 
   if (fiber.effectTag === 'PLACEMENT' && fiber.dom !== null) {
@@ -107,11 +108,11 @@ function commitWork(fiber) {
   commitWork(fiber.sibling);
 }
 
-function commitDeletion(fiber, parent) {
+function commitDeletion(fiber, domParent) {
   if (fiber.dom) {
-    parent.removeChild(fiber.dom);
+    domParent.removeChild(fiber.dom);
   } else {
-    commitDeletion(fiber.child, parent);
+    commitDeletion(fiber.child, domParent);
   }
 }
 
@@ -171,8 +172,43 @@ function performUnitOfWork(fiber) {
 }
 
 function updateFunctionComponent(fiber) {
+  wipFiber = fiber;
+  hookIndex = 0;
+  wipFiber.hooks = [];
   const children = [fiber.type(fiber.props)];
   reconcileChildren(fiber, children);
+}
+
+function useState(initial) {
+  const oldHook =
+    wipFiber.alternate &&
+    wipFiber.alternate.hooks &&
+    wipFiber.alternate.hooks[hookIndex];
+
+  const hook = {
+    state: oldHook ? oldHook.state : initial,
+    queue: [],
+  };
+
+  const actions = oldHook ? oldHook.queue : [];
+  actions.forEach((action) => {
+    hook.state = action(hook.state);
+  });
+
+  const setState = (action) => {
+    hook.queue.push(action);
+    wipRoot = {
+      dom: currentRoot.dom,
+      props: currentRoot.props,
+      alternate: currentRoot,
+    };
+    nextUnitOfWork = wipRoot;
+    deletions = [];
+  };
+
+  wipFiber.hooks.push(hook);
+  hookIndex++;
+  return [hook.state, setState];
 }
 
 function updateHostComponent(fiber) {
@@ -187,23 +223,24 @@ function updateHostComponent(fiber) {
 }
 
 function reconcileChildren(wipFiber, elements) {
-  let index = 0, prevSibling = null;
+  let index = 0;
+  let prevSibling = null;
   let oldFiber = wipFiber.alternate && wipFiber.alternate.child;
 
-  while (index < elements.length || oldFiber !== null) {
+  while (index < elements.length || oldFiber != null) {
     const element = elements[index];
     let newFiber = null;
 
-    const sameType = oldFiber && element && element.type === wipFiber.type;
+    const sameType = oldFiber && element && element.type === oldFiber.type;
 
     if (sameType) {
       newFiber = {
-        type: wipFiber.type,
+        type: oldFiber.type,
         props: element.props,
+        dom: oldFiber.dom,
         parent: wipFiber,
-        dom: wipFiber.dom,
-        alternate: wipFiber,
-        effectTag: 'UPDATE',
+        alternate: oldFiber,
+        effectTag: "UPDATE"
       };
     }
     if (element && !sameType) {
@@ -218,12 +255,16 @@ function reconcileChildren(wipFiber, elements) {
     }
     if (oldFiber && !sameType) {
       oldFiber.effectTag = 'DELETION';
-      deletions.push(wipFiber);
+      deletions.push(oldFiber);
     }
 
-    if (!index) {
+    if (oldFiber) {
+      oldFiber = oldFiber.sibling;
+    }
+
+    if (index === 0) {
       wipFiber.child = newFiber;
-    } else {
+    } else if (element) {
       prevSibling.sibling = newFiber;
     }
 
@@ -235,4 +276,5 @@ function reconcileChildren(wipFiber, elements) {
 export const ReactCopy = {
   createElement,
   render,
+  useState,
 };
