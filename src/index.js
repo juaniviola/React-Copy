@@ -7,8 +7,10 @@ function App(props) {
 
   return (
     <div id="foo">
-      <h1 onClick={() => setState(c => c+1)}>Hey, {props.name}</h1>
+      <h1>Hey, {props.name}</h1>
       <p>Counter: {state}</p>
+      <button onClick={() => setState((s) => s + 1)}>Increment</button>
+      <br />
       <a href="https://google.com/">something</a>
     </div>
   );
