@@ -2,11 +2,15 @@
 /** @jsx ReactCopy.createElement */
 import { ReactCopy } from './library';
 
-const element = (
-  <div id="foo">
-    <h1>hola</h1>
-    <a href="https://google.com/">something</a>
-  </div>
-);
+function App(props) {
+  return (
+    <div id="foo">
+      <h1>Hey {props.name}</h1>
+      <a href="https://google.com/">something</a>
+    </div>
+  );
+}
+
+const element = <App name="you" />;
 const container = document.getElementById('root');
 ReactCopy.render(element, container);

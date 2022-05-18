@@ -1,3 +1,8 @@
+let nextUnitOfWork = null;
+let currentRoot = null;
+let wipRoot = null;
+let deletions = null;
+
 function createElement(type, props, ...children) {
   return {
     type,
@@ -83,16 +88,31 @@ function commitRoot() {
 function commitWork(fiber) {
   if (!fiber) return;
 
-  const domParent = fiber.parent.dom;
+  let domParentFiber = fiber.parent;
+  while (!domParentFiber.dom) {
+    domParentFiber = domParentFiber.parent;
+  }
+
+  const domParent = domParentFiber.dom;
+
   if (fiber.effectTag === 'PLACEMENT' && fiber.dom !== null) {
     domParent.appendChild(fiber.dom);
   } else if (fiber.effectTag === 'UPDATE' && fiber.dom !== null) {
     updateDom(fiber.dom, fiber.alternate.props, fiber.props);
   } else if (fiber.effectTag === 'DELETION') {
-    domParent.removeChild(fiber.dom);
+    commitDeletion(fiber, domParent);
   }
+
   commitWork(fiber.child);
   commitWork(fiber.sibling);
+}
+
+function commitDeletion(fiber, parent) {
+  if (fiber.dom) {
+    parent.removeChild(fiber.dom);
+  } else {
+    commitDeletion(fiber.child, parent);
+  }
 }
 
 function render(element, container) {
@@ -107,11 +127,6 @@ function render(element, container) {
   deletions = [];
   nextUnitOfWork = wipRoot;
 }
-
-let nextUnitOfWork = null;
-let currentRoot = null;
-let wipRoot = null;
-let deletions = null;
 
 function workLoop(deadline) {
   let shouldYield = false;
@@ -131,14 +146,14 @@ function workLoop(deadline) {
 requestIdleCallback(workLoop);
 
 function performUnitOfWork(fiber) {
-  // add dom node
-  if (!fiber.dom) {
-    fiber.dom = createDom(fiber);
+  // if fiber is function, run function to get the children
+  // else add node to dom
+  const isFunctionComponent = fiber.type instanceof Function;
+  if (isFunctionComponent) {
+    updateFunctionComponent(fiber);
+  } else {
+    updateHostComponent(fiber);
   }
-
-  // create new fibers
-  const elements = fiber.props.children;
-  reconcileChildren(fiber, elements);
 
   // search next unit of work
   if (fiber.child) {
@@ -153,6 +168,22 @@ function performUnitOfWork(fiber) {
 
     nextFiber = nextFiber.parent;
   }
+}
+
+function updateFunctionComponent(fiber) {
+  const children = [fiber.type(fiber.props)];
+  reconcileChildren(fiber, children);
+}
+
+function updateHostComponent(fiber) {
+  // add dom node
+  if (!fiber.dom) {
+    fiber.dom = createDom(fiber);
+  }
+
+  // create new fibers
+  const elements = fiber.props.children;
+  reconcileChildren(fiber, elements);
 }
 
 function reconcileChildren(wipFiber, elements) {
